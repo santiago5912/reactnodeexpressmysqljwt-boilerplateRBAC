@@ -43,11 +43,12 @@ and its system dependencies.
 
 ## GitHub Actions: build and publish to Docker Hub
 
-The workflow in `.github/workflows/server-docker.yml` builds the server image for
-pull requests targeting `main`. Pushes to `main` build and publish the image to
-Docker Hub. Both triggers watch `server/**` and the workflow file. You can also
-run **Server Docker CI/CD** manually from the Actions tab; only runs on `main`
-publish images. Pull request builds do not require Docker Hub credentials.
+The reusable workflow in `.github/workflows/server-docker.yml` is called by
+**Repository CI** only after the frontend build and server tests pass. It builds
+the server image on every CI run; pushes and manual runs on `main` also publish
+to Docker Hub. Other branches and pull requests only build the image and do not
+require Docker Hub credentials. To trigger it manually, run **Repository CI**
+from the Actions tab. The Docker workflow has no independent triggers.
 
 Create a Docker Hub repository, then configure these settings under GitHub
 **Settings > Secrets and variables > Actions**:

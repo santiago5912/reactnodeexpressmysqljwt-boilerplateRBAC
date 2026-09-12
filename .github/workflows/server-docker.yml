@@ -1,24 +1,14 @@
 name: Server Docker CI/CD
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'server/**'
-      - '.github/workflows/server-docker.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'server/**'
-      - '.github/workflows/server-docker.yml'
-  workflow_dispatch:
+  workflow_call:
+    secrets:
+      DOCKERHUB_TOKEN:
+        description: Docker Hub access token required when publishing from main
+        required: false
 
 permissions:
   contents: read
-
-concurrency:
-  group: server-docker-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build-and-push:

@@ -67,3 +67,10 @@ jobs:
           openssl pkey -in certs/jwtRS256.key -pubout -out certs/jwtRS256.key.pub
       - name: Run server tests
         run: npm test -- --ci --runInBand
+
+  server-docker:
+    name: Build and publish server image
+    needs: [frontend, server]
+    uses: ./.github/workflows/server-docker.yml
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

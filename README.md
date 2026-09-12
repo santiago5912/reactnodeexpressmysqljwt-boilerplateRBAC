@@ -18,8 +18,10 @@ and manual run. Two jobs use Node.js 22 and install locked dependencies with
 The frontend has no automated test suite yet. The server is plain JavaScript and
 requires no compilation step. CI generates disposable RSA keys for the server
 tests; no production secrets or database are required by the current test suite.
-The separate `server-docker.yml` workflow builds and publishes Docker Hub images;
-it runs independently of this workflow.
+After both jobs pass, CI calls `server-docker.yml` as a reusable workflow to build
+the server image. Pushes and manual runs on `main` also publish it to Docker Hub.
+Other branches and pull requests only build the image. Docker Hub setup is
+documented in [server/README.md](server/README.md).
 
 Node setup and dependency caching use [actions/setup-node](https://github.com/actions/setup-node).
 
