@@ -10,9 +10,29 @@ permissions:
 
 concurrency:
   group: repository-ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  deployment-validation:
+    name: Validate Ansible playbooks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Set up validation environment
+        run: |
+          python3 -m venv /tmp/ansible-validation
+          /tmp/ansible-validation/bin/pip install -r deploy/ansible/requirements.txt
+          /tmp/ansible-validation/bin/pip install kubernetes-validate==1.36.0
+          /tmp/ansible-validation/bin/ansible-galaxy collection install -r deploy/ansible/requirements.yml
+      - name: Check playbook syntax
+        run: |
+          /tmp/ansible-validation/bin/ansible-playbook -i deploy/ansible/inventory.example.yml deploy/ansible/bootstrap.yml --syntax-check
+          /tmp/ansible-validation/bin/ansible-playbook deploy/ansible/deploy.yml --syntax-check
+          /tmp/ansible-validation/bin/ansible-playbook deploy/ansible/validate.yml
+
   frontend:
     name: Compile and build frontend
     runs-on: ubuntu-latest
@@ -70,7 +90,21 @@ jobs:
 
   server-docker:
     name: Build and publish server image
-    needs: [frontend, server]
+    needs: [frontend, server, deployment-validation]
     uses: ./.github/workflows/server-docker.yml
     secrets:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  frontend-docker:
+    name: Build and publish frontend image
+    needs: [frontend, server, deployment-validation]
+    if: vars.DOCKERHUB_FRONTEND_IMAGE != ''
+    uses: ./.github/workflows/frontend-docker.yml
+    secrets:
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  onprem-deploy:
+    name: Deploy to on-premises Kubernetes
+    needs: [server-docker, frontend-docker]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.ONPREM_DEPLOY_ENABLED == 'true'
+    uses: ./.github/workflows/onprem-deploy.yml

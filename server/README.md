@@ -33,9 +33,8 @@ Provide both JWT key files listed above and ensure they are readable by the cont
 `node` user. Mount private assets at `/app/private` and uploads at `/app/public/uploads`
 if needed. Environment files, keys, and these runtime assets are excluded from the image.
 
-The database configuration currently hardcodes `localhost`, which refers to the
-container itself. Configure `server/config/db.js` with a reachable database hostname
-before building when MySQL runs outside this container.
+Set `DB_HOST` to a reachable MySQL hostname when MySQL runs outside the container.
+`DB_PORT` defaults to `3306`; `DB_HOST` defaults to `localhost` for local development.
 
 The image runs `node server.js` with production dependencies. Puppeteer's unused
 browser download is disabled; browser automation would require installing a browser

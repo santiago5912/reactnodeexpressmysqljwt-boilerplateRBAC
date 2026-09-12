@@ -1,0 +1,4 @@
+# Copy to vault.yml, replace values, then encrypt with ansible-vault encrypt.
+db_password: REPLACE_WITH_DATABASE_PASSWORD
+aes_key: REPLACE_WITH_A_LONG_RANDOM_SECRET
+registry_password: ''

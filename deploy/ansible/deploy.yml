@@ -1,0 +1,68 @@
+- name: Deploy the application to single-node Kubernetes
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ansible_python_interpreter: '{{ ansible_playbook_python }}'
+  module_defaults:
+    group/kubernetes.core.k8s:
+      kubeconfig: '{{ kubeconfig_path }}'
+  tasks:
+    - name: Validate application configuration
+      ansible.builtin.assert:
+        that:
+          - app_namespace is match('^[a-z0-9][a-z0-9-]*[a-z0-9]$')
+          - app_hostname | length > 0
+          - "'REPLACE' not in server_image"
+          - "'REPLACE' not in frontend_image"
+          - db_host | length > 0
+          - db_password | length > 0
+          - "'REPLACE' not in db_password"
+          - aes_key | length >= 32
+          - "'REPLACE' not in aes_key"
+          - registry_username | length == 0 or registry_password | length > 0
+      no_log: true
+
+    - name: Check cluster topology
+      kubernetes.core.k8s_info:
+        kind: Node
+      register: cluster_nodes
+
+    - name: Require a single-node cluster
+      ansible.builtin.assert:
+        that: cluster_nodes.resources | length == 1
+        fail_msg: This deployment is intended for a single-node cluster.
+
+    - name: Create application namespace
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: '{{ app_namespace }}'
+
+    - name: Apply application secrets
+      kubernetes.core.k8s:
+        state: present
+        definition: "{{ lookup('template', 'templates/secrets.yml.j2') | from_yaml_all | list }}"
+      no_log: true
+
+    - name: Apply storage, services and workloads
+      kubernetes.core.k8s:
+        state: present
+        apply: true
+        definition: "{{ lookup('template', 'templates/application.yml.j2') | from_yaml_all | list }}"
+        wait: true
+        wait_timeout: 300
+
+    - name: Verify frontend and API through HTTPS ingress
+      ansible.builtin.uri:
+        url: 'https://{{ app_hostname }}{{ item }}'
+        status_code: 200
+        validate_certs: true
+      loop: ['/', '/api/dummydata']
+      register: ingress_check
+      retries: 12
+      delay: 5
+      until: ingress_check.status | default(0) == 200

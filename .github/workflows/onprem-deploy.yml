@@ -1,0 +1,46 @@
+name: On-premises Kubernetes deployment
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.ONPREM_DEPLOY_ENABLED == 'true'
+    runs-on: [self-hosted, linux, x64, onprem]
+    environment: onprem
+    timeout-minutes: 20
+    concurrency:
+      group: onprem-application
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install Ansible into an isolated environment
+        shell: bash
+        run: |
+          python3 -m venv "$RUNNER_TEMP/onprem-venv"
+          "$RUNNER_TEMP/onprem-venv/bin/pip" install -r deploy/ansible/requirements.txt
+          "$RUNNER_TEMP/onprem-venv/bin/ansible-galaxy" collection install -r deploy/ansible/requirements.yml
+      - name: Deploy the images published by this CI run
+        shell: bash
+        env:
+          SERVER_IMAGE: ${{ vars.DOCKERHUB_IMAGE }}:sha-${{ github.sha }}
+          FRONTEND_IMAGE: ${{ vars.DOCKERHUB_FRONTEND_IMAGE }}:sha-${{ github.sha }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          Path(os.environ['RUNNER_TEMP'], 'onprem-images.json').write_text(json.dumps({
+              'server_image': os.environ['SERVER_IMAGE'],
+              'frontend_image': os.environ['FRONTEND_IMAGE'],
+          }))
+          PY
+          "$RUNNER_TEMP/onprem-venv/bin/ansible-playbook" deploy/ansible/deploy.yml \
+            -e @/etc/jwt-app/site-vars.yml \
+            -e @/etc/jwt-app/vault.yml \
+            --vault-password-file /etc/jwt-app/vault-password \
+            -e "@$RUNNER_TEMP/onprem-images.json"

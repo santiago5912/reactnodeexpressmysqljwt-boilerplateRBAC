@@ -1,0 +1,7 @@
+inventory.yml
+site-vars.yml
+vault.yml
+*.pem
+*.key
+*.crt
+.venv/

@@ -1,0 +1,173 @@
+{% for volume in ['uploads', 'private'] %}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: server-{{ volume }}
+  namespace: {{ app_namespace }}
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: {{ storage_class | to_json }}
+  resources:
+    requests:
+      storage: {{ storage_size | to_json }}
+---
+{% endfor %}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: server
+  namespace: {{ app_namespace }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: {app: server}
+  template:
+    metadata:
+      labels: {app: server}
+      annotations:
+        checksum/secrets: {{ lookup('template', 'secrets.yml.j2') | hash('sha256') | to_json }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+{% if registry_username | length > 0 %}
+      imagePullSecrets: [{name: dockerhub}]
+{% endif %}
+      containers:
+        - name: server
+          image: {{ server_image | to_json }}
+          imagePullPolicy: Always
+          ports: [{name: http, containerPort: 5010}]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          envFrom:
+            - secretRef: {name: app-runtime}
+          env:
+            - {name: APP_MODE, value: 'prod'}
+            - {name: APP_PORT, value: '5010'}
+            - {name: APP_BASE_URL, value: {{ ('https://' ~ app_hostname) | to_json }} }
+            - {name: AES_ENC_SALT, value: '32'}
+            - {name: DB_HOST, value: {{ db_host | to_json }} }
+            - {name: DB_PORT, value: {{ db_port | string | to_json }} }
+            - {name: DB_NAME_LIVE, value: {{ db_name | to_json }} }
+            - {name: DB_USER_LIVE, value: {{ db_user | to_json }} }
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: '1', memory: 512Mi}
+          startupProbe:
+            httpGet: {path: /api/dummydata, port: http}
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: {path: /api/dummydata, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /api/dummydata, port: http}
+            periodSeconds: 20
+          volumeMounts:
+            - {name: jwt, mountPath: /app/certs, readOnly: true}
+            - {name: uploads, mountPath: /app/public/uploads}
+            - {name: private, mountPath: /app/private}
+      volumes:
+        - name: jwt
+          secret: {secretName: app-jwt, defaultMode: 288}
+        - name: uploads
+          persistentVolumeClaim: {claimName: server-uploads}
+        - name: private
+          persistentVolumeClaim: {claimName: server-private}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: server
+  namespace: {{ app_namespace }}
+spec:
+  selector: {app: server}
+  ports: [{port: 5010, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: {{ app_namespace }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: {app: frontend}
+  template:
+    metadata:
+      labels: {app: frontend}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile: {type: RuntimeDefault}
+{% if registry_username | length > 0 %}
+      imagePullSecrets: [{name: dockerhub}]
+{% endif %}
+      containers:
+        - name: frontend
+          image: {{ frontend_image | to_json }}
+          imagePullPolicy: Always
+          ports: [{name: http, containerPort: 8080}]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 50m, memory: 32Mi}
+            limits: {cpu: 250m, memory: 128Mi}
+          readinessProbe:
+            httpGet: {path: /, port: http}
+          livenessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: {{ app_namespace }}
+spec:
+  selector: {app: frontend}
+  ports: [{port: 8080, targetPort: http}]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: application
+  namespace: {{ app_namespace }}
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: 'true'
+spec:
+  ingressClassName: {{ ingress_class | to_json }}
+  tls:
+    - hosts: [{{ app_hostname | to_json }}]
+      secretName: app-tls
+  rules:
+    - host: {{ app_hostname | to_json }}
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service: {name: server, port: {number: 5010}}
+          - path: /storage
+            pathType: Prefix
+            backend:
+              service: {name: server, port: {number: 5010}}
+          - path: /
+            pathType: Prefix
+            backend:
+              service: {name: frontend, port: {number: 8080}}

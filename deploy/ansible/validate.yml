@@ -1,0 +1,54 @@
+# Offline validation: renders synthetic credentials, never contacts Kubernetes.
+- name: Render and validate Kubernetes manifests
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - site-vars.example.yml
+  vars:
+    ansible_python_interpreter: '{{ ansible_playbook_python }}'
+    server_image: example/server:validation
+    frontend_image: example/frontend:validation
+    db_password: validation-only
+    aes_key: validation-only-not-a-real-secret-123456
+    registry_password: validation-only
+  tasks:
+    - name: Create temporary validation directory
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: jwt-manifests-
+      register: validation_dir
+
+    - name: Validate both public and private image configurations
+      block:
+        - name: Create synthetic file data for schema validation
+          ansible.builtin.copy:
+            content: 'synthetic-key-material-for-schema-validation-only'
+            dest: '{{ validation_dir.path }}/fixture'
+            mode: '0600'
+
+        - name: Render manifests
+          ansible.builtin.template:
+            src: 'templates/{{ item.0 }}.yml.j2'
+            dest: '{{ validation_dir.path }}/{{ item.0 }}-{{ item.1 }}.yml'
+            mode: '0600'
+          vars:
+            registry_username: "{{ 'validation-user' if item.1 == 'private' else '' }}"
+            jwt_private_key_path: '{{ validation_dir.path }}/fixture'
+            jwt_public_key_path: '{{ validation_dir.path }}/fixture'
+            tls_certificate_path: '{{ validation_dir.path }}/fixture'
+            tls_private_key_path: '{{ validation_dir.path }}/fixture'
+          loop: "{{ ['application', 'secrets'] | product(['public', 'private']) | list }}"
+
+        - name: Validate rendered resources against Kubernetes schemas
+          ansible.builtin.command:
+            argv:
+              - '{{ ansible_playbook_python }}'
+              - '{{ playbook_dir }}/validate_manifests.py'
+              - '{{ validation_dir.path }}'
+          changed_when: false
+      always:
+        - name: Remove temporary validation fixtures
+          ansible.builtin.file:
+            path: '{{ validation_dir.path }}'
+            state: absent

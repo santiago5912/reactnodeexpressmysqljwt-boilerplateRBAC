@@ -1,0 +1,4 @@
+ansible-core>=2.19,<2.20
+kubernetes>=24.2.0,<35
+PyYAML>=6,<7
+jsonpatch>=1.33,<2

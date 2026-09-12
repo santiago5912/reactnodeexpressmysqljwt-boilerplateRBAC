@@ -1,0 +1,21 @@
+# Copy to site-vars.yml. Paths are on the Ansible controller/self-hosted runner.
+app_namespace: jwt-app
+app_hostname: app.example.internal
+server_image: your-user/jwt-server:sha-REPLACE_WITH_COMMIT
+frontend_image: your-user/jwt-frontend:sha-REPLACE_WITH_COMMIT
+kubeconfig_path: /home/deploy/.kube/config
+storage_class: local-path
+storage_size: 5Gi
+ingress_class: traefik
+tls_certificate_path: /home/deploy/certs/app.crt
+tls_private_key_path: /home/deploy/certs/app.key
+jwt_private_key_path: /home/deploy/certs/jwtRS256.key
+jwt_public_key_path: /home/deploy/certs/jwtRS256.key.pub
+db_host: 192.168.1.60
+db_port: 3306
+db_name: node_express_boiler_plate
+db_user: live_user
+# Used only for private Docker Hub repositories. Leave empty for public images.
+registry_username: ''
+# Required for bootstrap.yml; choose and pin a tested K3s release.
+k3s_version: REPLACE_WITH_K3S_VERSION

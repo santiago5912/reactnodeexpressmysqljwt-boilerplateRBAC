@@ -25,6 +25,15 @@ documented in [server/README.md](server/README.md).
 
 Node setup and dependency caching use [actions/setup-node](https://github.com/actions/setup-node).
 
+## On-premises Kubernetes deployment
+
+[Ansible deployment instructions](deploy/ansible/README.md) cover optional
+single-node K3s installation and deployment of the frontend and server with HTTPS,
+external MySQL, and persistent server assets. Set `DOCKERHUB_FRONTEND_IMAGE` to
+enable frontend image publishing. Set `ONPREM_DEPLOY_ENABLED=true` after configuring
+an `onprem` self-hosted runner to deploy both images after CI and image publication
+succeed. Application deployment is disabled by default.
+
 ## Features:
 
 1. CRUD-ready, decoupled React and Node/Express app

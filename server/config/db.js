@@ -4,7 +4,8 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const pool = mysql.createPool({
-  host: "localhost",
+  host: process.env.DB_HOST || "localhost",
+  port: Number(process.env.DB_PORT || 3306),
   user:
     process.env.APP_MODE === "prod"
       ? process.env.DB_USER_LIVE
