@@ -1,0 +1,13 @@
+node_modules
+.npm-cache
+.git
+.env
+.env.*
+!.env.example
+certs
+private
+public/uploads
+coverage
+tests
+*.log
+*.zip
