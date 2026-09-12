@@ -6,6 +6,23 @@ This boilerplate was created to gain a better understanding of JWT and to add sc
 
 Feel free to remove any tools like MUI, MySQL2 as the app structure is flexible and scalable.
 
+## Continuous integration
+
+`.github/workflows/ci.yml` checks out the repository on every push, pull request,
+and manual run. Two jobs use Node.js 22 and install locked dependencies with
+`npm ci`:
+
+- Frontend: compile TypeScript and build production assets with `npm run build`.
+- Server: check JavaScript syntax and run Jest with `npm test -- --ci --runInBand`.
+
+The frontend has no automated test suite yet. The server is plain JavaScript and
+requires no compilation step. CI generates disposable RSA keys for the server
+tests; no production secrets or database are required by the current test suite.
+The separate `server-docker.yml` workflow builds and publishes Docker Hub images;
+it runs independently of this workflow.
+
+Node setup and dependency caching use [actions/setup-node](https://github.com/actions/setup-node).
+
 ## Features:
 
 1. CRUD-ready, decoupled React and Node/Express app
